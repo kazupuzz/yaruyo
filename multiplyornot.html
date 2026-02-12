@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>倍数マスター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+        /* アニメーション用のユーティリティ（Tailwindのプラグインなしで対応するため） */
+        .animate-in {
+            animation: fade-in-zoom 0.3s ease-out forwards;
+        }
+        @keyframes fade-in-zoom {
+            0% { opacity: 0; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-100 p-4 md:p-8 flex flex-col items-center font-sans text-slate-800">
+
+    <div class="max-w-2xl w-full bg-white rounded-3xl shadow-xl p-6 md:p-10 border border-slate-200">
+        <!-- ヘッダー -->
+        <div class="flex items-center justify-center gap-2 mb-8">
+            <svg class="text-indigo-500 w-8 h-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <h1 class="text-2xl md:text-3xl font-bold text-center text-slate-800 tracking-tight">倍数マスター</h1>
+        </div>
+        
+        <!-- 条件表示エリア -->
+        <div class="flex flex-col md:flex-row gap-4 md:gap-6 mb-10">
+            <div class="flex-1 bg-blue-50/50 rounded-2xl p-5 border-2 border-blue-100 shadow-sm">
+                <h2 class="text-md font-bold text-blue-800 mb-4 text-center tracking-wide">倍数である</h2>
+                <div id="includes-container" class="flex flex-wrap gap-3 justify-center min-h-[4rem] items-center">
+                    <!-- JSで描画 -->
+                </div>
+            </div>
+
+            <div class="flex-1 bg-rose-50/50 rounded-2xl p-5 border-2 border-rose-100 shadow-sm">
+                <h2 class="text-md font-bold text-rose-800 mb-4 text-center tracking-wide">倍数でない</h2>
+                <div id="excludes-container" class="flex flex-wrap gap-3 justify-center min-h-[4rem] items-center">
+                    <!-- JSで描画 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 選択肢エリア -->
+        <div class="mb-10">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
+                <p class="text-center text-slate-700 font-medium">
+                    上の条件を満たすカードを<span class="text-rose-600 font-bold mx-1">全て</span>選んでください
+                </p>
+            </div>
+            <div id="options-container" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <!-- JSで描画 -->
+            </div>
+        </div>
+
+        <!-- アクション＆結果エリア -->
+        <div id="action-container" class="flex flex-col items-center justify-center min-h-[5rem]">
+            <!-- JSで描画 -->
+        </div>
+    </div>
+
+    <script>
+        // 状態管理
+        let state = {
+            includes: [],
+            excludes: [],
+            options: [],
+            selected: [],
+            status: 'playing' // 'playing' | 'correct' | 'incorrect'
+        };
+
+        // DOM要素の取得
+        const includesContainer = document.getElementById('includes-container');
+        const excludesContainer = document.getElementById('excludes-container');
+        const optionsContainer = document.getElementById('options-container');
+        const actionContainer = document.getElementById('action-container');
+
+        // SVGアイコンの定義
+        const icons = {
+            check: `<svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
+            checkLarge: `<svg class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
+            x: `<svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
+            refresh: `<svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`
+        };
+
+        // 配列シャッフル関数
+        const shuffleArray = (arr) => {
+            const newArr = [...arr];
+            for (let i = newArr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+            }
+            return newArr;
+        };
+
+        // 問題の生成
+        const generateProblem = () => {
+            let validIncludes = [];
+            let validExcludes = [];
+            let validAnswers = [];
+            let invalidAnswers = [];
+            let attempts = 0;
+
+            while (attempts < 100) {
+                attempts++;
+                const nums = shuffleArray([2, 3, 4, 5, 6, 7, 8, 9]);
+                
+                const numIncludes = Math.floor(Math.random() * 4);
+                const numExcludes = Math.floor(Math.random() * 4);
+                
+                const finalNumIncludes = (numIncludes === 0 && numExcludes === 0) ? 1 : numIncludes;
+
+                validIncludes = nums.slice(0, finalNumIncludes).sort((a, b) => a - b);
+                validExcludes = nums.slice(finalNumIncludes, finalNumIncludes + numExcludes).sort((a, b) => a - b);
+
+                validAnswers = [];
+                invalidAnswers = [];
+
+                for (let i = 10; i <= 99; i++) {
+                    const isMultipleOfAll = validIncludes.length === 0 || validIncludes.every(inc => i % inc === 0);
+                    const isNotMultipleOfAny = validExcludes.length === 0 || validExcludes.every(exc => i % exc !== 0);
+
+                    if (isMultipleOfAll && isNotMultipleOfAny) {
+                        validAnswers.push(i);
+                    } else {
+                        invalidAnswers.push(i);
+                    }
+                }
+
+                if (validAnswers.length >= 1 && invalidAnswers.length >= 5) {
+                    break;
+                }
+            }
+
+            const numCorrectOptions = Math.floor(Math.random() * Math.min(4, validAnswers.length)) + 1;
+            const numIncorrectOptions = 6 - numCorrectOptions;
+
+            const selectedCorrect = shuffleArray(validAnswers).slice(0, numCorrectOptions);
+            const selectedIncorrect = shuffleArray(invalidAnswers).slice(0, numIncorrectOptions);
+
+            const finalOptions = shuffleArray([...selectedCorrect, ...selectedIncorrect]);
+
+            state = {
+                includes: validIncludes,
+                excludes: validExcludes,
+                options: finalOptions,
+                selected: [],
+                status: 'playing'
+            };
+
+            render();
+        };
+
+        // 選択の切り替え
+        const toggleSelect = (num) => {
+            if (state.status === 'correct') return;
+            
+            if (state.status === 'incorrect') {
+                state.status = 'playing';
+            }
+
+            if (state.selected.includes(num)) {
+                state.selected = state.selected.filter(n => n !== num);
+            } else {
+                state.selected.push(num);
+            }
+
+            render();
+        };
+
+        // 答え合わせ
+        const checkAnswer = () => {
+            const isCorrectSelection = state.options.every(opt => {
+                const isCorrectOption = 
+                    (state.includes.length === 0 || state.includes.every(inc => opt % inc === 0)) && 
+                    (state.excludes.length === 0 || state.excludes.every(exc => opt % exc !== 0));
+                
+                const isSelected = state.selected.includes(opt);
+                return isCorrectOption === isSelected;
+            });
+
+            if (isCorrectSelection) {
+                state.status = 'correct';
+                render();
+            } else {
+                state.status = 'incorrect';
+                render();
+                
+                // シェイクアニメーションを適用
+                const actionGroup = document.getElementById('check-group');
+                if (actionGroup) {
+                    actionGroup.classList.remove('animate-shake');
+                    void actionGroup.offsetWidth; // リフローを強制してアニメーションをリセット
+                    actionGroup.classList.add('animate-shake');
+                }
+            }
+        };
+
+        // 画面の描画更新
+        const render = () => {
+            // 倍数であるエリアの描画
+            if (state.includes.length > 0) {
+                includesContainer.innerHTML = state.includes.map(n => 
+                    `<div class="w-14 h-14 bg-white rounded-xl shadow-sm border-2 border-blue-300 flex items-center justify-center text-2xl font-black text-blue-600">${n}</div>`
+                ).join('');
+            } else {
+                includesContainer.innerHTML = `<span class="text-blue-400 font-medium bg-blue-100/50 px-4 py-2 rounded-lg">なし</span>`;
+            }
+
+            // 倍数でないエリアの描画
+            if (state.excludes.length > 0) {
+                excludesContainer.innerHTML = state.excludes.map(n => 
+                    `<div class="w-14 h-14 bg-white rounded-xl shadow-sm border-2 border-rose-300 flex items-center justify-center text-2xl font-black text-rose-600">${n}</div>`
+                ).join('');
+            } else {
+                excludesContainer.innerHTML = `<span class="text-rose-400 font-medium bg-rose-100/50 px-4 py-2 rounded-lg">なし</span>`;
+            }
+
+            // 選択肢エリアの描画
+            optionsContainer.innerHTML = state.options.map(n => {
+                const isSelected = state.selected.includes(n);
+                const disabledAttr = state.status === 'correct' ? 'disabled' : '';
+                const styleClasses = isSelected 
+                    ? 'bg-amber-100 border-amber-400 text-amber-700 scale-105 shadow-md' 
+                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:scale-[1.02]';
+                
+                return `
+                    <button
+                        onclick="toggleSelect(${n})"
+                        ${disabledAttr}
+                        class="h-24 rounded-2xl text-3xl font-black transition-all duration-200 border-4 ${styleClasses}"
+                    >
+                        ${n}
+                    </button>
+                `;
+            }).join('');
+
+            // アクション＆結果エリアの描画
+            if (state.status === 'playing' || state.status === 'incorrect') {
+                actionContainer.innerHTML = `
+                    <div id="check-group" class="flex flex-col items-center gap-4">
+                        <button onclick="checkAnswer()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-full text-lg shadow-lg shadow-indigo-200 transition-all active:scale-95 flex items-center gap-3">
+                            ${icons.check}
+                            判定する
+                        </button>
+                        ${state.status === 'incorrect' ? `
+                            <div class="text-rose-500 font-bold flex items-center gap-2 bg-rose-50 px-6 py-2 rounded-full border border-rose-200">
+                                ${icons.x}
+                                間違っています。選択を見直してやり直してください！
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            } else if (state.status === 'correct') {
+                actionContainer.innerHTML = `
+                    <div class="flex flex-col items-center gap-6 animate-in">
+                        <div class="text-emerald-500 font-black text-2xl flex items-center gap-3 bg-emerald-50 px-8 py-3 rounded-full border-2 border-emerald-200">
+                            ${icons.checkLarge}
+                            大正解！
+                        </div>
+                        <button onclick="generateProblem()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 px-10 rounded-full shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center gap-3 text-lg">
+                            ${icons.refresh}
+                            次の問題へ
+                        </button>
+                    </div>
+                `;
+            }
+        };
+
+        // 初期化実行
+        generateProblem();
+    </script>
+</body>
+</html>
