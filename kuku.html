@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>九九の光 - パズルゲーム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --highlight: #fde047;
+            --grid-bg: #1e293b;
+            --cell-border: #334155;
+            --cell-size: 40px;
+            --bar-size: 50px;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'sans-serif';
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            touch-action: manipulation;
+        }
+
+        .game-container {
+            max-width: 600px;
+            width: 100%;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .target-display {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 2px solid var(--primary);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+            width: 100%;
+        }
+
+        .target-number {
+            font-size: 3.5rem;
+            font-weight: 800;
+            color: var(--highlight);
+            text-shadow: 0 0 10px rgba(253, 224, 71, 0.5);
+            line-height: 1;
+        }
+
+        /* グリッドレイアウトの固定化 */
+        .board-layout {
+            display: grid;
+            grid-template-columns: var(--bar-size) calc(var(--cell-size) * 8);
+            grid-template-rows: var(--bar-size) calc(var(--cell-size) * 8);
+            position: relative;
+            user-select: none;
+        }
+
+        /* バーの数値ラベル */
+        .bar-top {
+            grid-column: 2;
+            display: grid;
+            grid-template-columns: repeat(8, var(--cell-size));
+            height: var(--bar-size);
+            position: relative;
+        }
+
+        .bar-left {
+            grid-row: 2;
+            display: grid;
+            grid-template-rows: repeat(8, var(--cell-size));
+            width: var(--bar-size);
+            position: relative;
+        }
+
+        .number-label {
+            font-weight: bold;
+            font-size: 1.3rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 30; /* オブジェクトより上に配置 */
+            color: #94a3b8;
+            transition: color 0.2s;
+        }
+        .number-label.active {
+            color: white;
+            text-shadow: 0 0 8px var(--primary);
+        }
+
+        /* スライダーオブジェクト（リング状にして数字を見せる） */
+        .emitter {
+            position: absolute;
+            border: 3px solid var(--primary);
+            border-radius: 50%;
+            z-index: 20;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 15px var(--primary);
+            pointer-events: none; /* クリックはラベル側で受ける */
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .emitter-top {
+            width: 36px;
+            height: 36px;
+            top: 7px;
+            left: 0;
+            transform: translateX(2px);
+        }
+
+        .emitter-left {
+            width: 36px;
+            height: 36px;
+            left: 7px;
+            top: 0;
+            transform: translateY(2px);
+        }
+
+        /* 光の演出（均一な明るさ） */
+        .light-beam-v {
+            position: absolute;
+            top: var(--bar-size);
+            width: var(--cell-size);
+            height: calc(var(--cell-size) * 8);
+            background: rgba(59, 130, 246, 0.25);
+            pointer-events: none;
+            z-index: 5;
+            border-left: 1px solid rgba(59, 130, 246, 0.3);
+            border-right: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .light-beam-h {
+            position: absolute;
+            left: var(--bar-size);
+            height: var(--cell-size);
+            width: calc(var(--cell-size) * 8);
+            background: rgba(59, 130, 246, 0.25);
+            pointer-events: none;
+            z-index: 5;
+            border-top: 1px solid rgba(59, 130, 246, 0.3);
+            border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        /* 表のグリッド */
+        .grid-main {
+            grid-column: 2;
+            grid-row: 2;
+            display: grid;
+            grid-template-columns: repeat(8, var(--cell-size));
+            grid-template-rows: repeat(8, var(--cell-size));
+            background-color: var(--grid-bg);
+            border: 2px solid var(--cell-border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .cell {
+            border: 1px solid var(--cell-border);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8rem;
+            color: #475569;
+            transition: all 0.2s;
+        }
+
+        .cell.intersection {
+            background-color: rgba(59, 130, 246, 0.5);
+            color: white;
+            font-weight: bold;
+            font-size: 1.6rem;
+            box-shadow: inset 0 0 15px rgba(59, 130, 246, 0.6);
+            border: 2px solid var(--primary);
+            z-index: 15;
+        }
+
+        .success-animation {
+            animation: pulse 0.5s infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { transform: scale(1); box-shadow: 0 0 20px var(--highlight); }
+            to { transform: scale(1.1); box-shadow: 0 0 40px var(--highlight); }
+        }
+
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            margin-top: 2rem;
+            transition: transform 0.1s, opacity 0.2s;
+            cursor: pointer;
+        }
+        .btn:active { transform: scale(0.95); }
+
+        .msg-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1e293b;
+            border: 3px solid var(--highlight);
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            text-align: center;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 60px rgba(0,0,0,0.9);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1 class="text-2xl font-bold mb-4 tracking-wider">九九の光</h1>
+        
+        <div class="target-display">
+            <p class="text-sm text-slate-400 mb-2">目標の数をつくってください</p>
+            <div id="target-number" class="target-number">??</div>
+        </div>
+
+        <div class="board-layout" id="game-board">
+            <div></div>
+
+            <div class="bar-top" id="bar-top">
+                <!-- ラベルはJSで生成 -->
+                <div id="emitter-top" class="emitter emitter-top"></div>
+            </div>
+
+            <div class="bar-left" id="bar-left">
+                <!-- ラベルはJSで生成 -->
+                <div id="emitter-left" class="emitter emitter-left"></div>
+            </div>
+
+            <div class="grid-main" id="grid-main"></div>
+
+            <div id="beam-v" class="light-beam-v"></div>
+            <div id="beam-h" class="light-beam-h"></div>
+        </div>
+
+        <button class="btn" onclick="initGame()">新しい数字に変更</button>
+        
+        <div class="mt-8 text-slate-400 text-sm max-w-xs text-center leading-relaxed">
+            数字をクリック、またはスライダーをドラッグして動かしてください。
+        </div>
+    </div>
+
+    <div id="msg-box" class="msg-box">
+        <h2 class="text-4xl font-bold text-yellow-400 mb-4">CLEAR!</h2>
+        <p id="msg-text" class="text-xl mb-6">素晴らしいです！</p>
+        <button class="btn" onclick="closeMsg()">次の問題へ</button>
+    </div>
+
+    <script>
+        const gridMain = document.getElementById('grid-main');
+        const targetEl = document.getElementById('target-number');
+        const emitterTop = document.getElementById('emitter-top');
+        const emitterLeft = document.getElementById('emitter-left');
+        const beamV = document.getElementById('beam-v');
+        const beamH = document.getElementById('beam-h');
+        const msgBox = document.getElementById('msg-box');
+        const barTop = document.getElementById('bar-top');
+        const barLeft = document.getElementById('bar-left');
+
+        const CELL_SIZE = 40;
+        const BAR_SIZE = 50;
+
+        let targetValue = 0;
+        let currentX = 2;
+        let currentY = 2;
+        let isGameCleared = false;
+
+        const possibleProducts = [];
+        for (let i = 2; i <= 9; i++) {
+            for (let j = 2; j <= 9; j++) {
+                possibleProducts.push(i * j);
+            }
+        }
+        const uniqueProducts = [...new Set(possibleProducts)].sort((a, b) => a - b);
+
+        function setupBoard() {
+            // バーの数値を生成
+            for (let i = 2; i <= 9; i++) {
+                const labelT = document.createElement('div');
+                labelT.className = 'number-label';
+                labelT.textContent = i;
+                labelT.dataset.val = i;
+                labelT.addEventListener('mousedown', () => updatePositions(i, currentY));
+                labelT.addEventListener('touchstart', (e) => {
+                    updatePositions(i, currentY);
+                    e.preventDefault();
+                });
+                barTop.appendChild(labelT);
+
+                const labelL = document.createElement('div');
+                labelL.className = 'number-label';
+                labelL.textContent = i;
+                labelL.dataset.val = i;
+                labelL.addEventListener('mousedown', () => updatePositions(currentX, i));
+                labelL.addEventListener('touchstart', (e) => {
+                    updatePositions(currentX, i);
+                    e.preventDefault();
+                });
+                barLeft.appendChild(labelL);
+            }
+
+            // グリッドを生成
+            for (let r = 2; r <= 9; r++) {
+                for (let c = 2; c <= 9; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `cell-${r}-${c}`;
+                    gridMain.appendChild(cell);
+                }
+            }
+        }
+
+        function initGame() {
+            isGameCleared = false;
+            targetValue = uniqueProducts[Math.floor(Math.random() * uniqueProducts.length)];
+            targetEl.textContent = targetValue;
+            updatePositions(2, 2);
+            closeMsg();
+        }
+
+        function updatePositions(x, y) {
+            currentX = x;
+            currentY = y;
+
+            const colIndex = x - 2;
+            const rowIndex = y - 2;
+
+            // スライダー位置更新 (正確に中心に合わせる)
+            emitterTop.style.left = `${colIndex * CELL_SIZE}px`;
+            emitterLeft.style.top = `${rowIndex * CELL_SIZE}px`;
+
+            // ビーム位置更新 (ピクセルパーフェクト)
+            beamV.style.left = `${BAR_SIZE + (colIndex * CELL_SIZE)}px`;
+            beamH.style.top = `${BAR_SIZE + (rowIndex * CELL_SIZE)}px`;
+
+            // ラベルのハイライト
+            document.querySelectorAll('.number-label').forEach(el => el.classList.remove('active'));
+            barTop.children[colIndex].classList.add('active');
+            barLeft.children[rowIndex].classList.add('active');
+
+            // セル更新
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('intersection', 'success-animation');
+                cell.textContent = '';
+            });
+
+            const activeCell = document.getElementById(`cell-${y}-${x}`);
+            activeCell.classList.add('intersection');
+            const result = x * y;
+            activeCell.textContent = result;
+
+            if (result === targetValue && !isGameCleared) {
+                isGameCleared = true;
+                activeCell.classList.add('success-animation');
+                setTimeout(showSuccess, 500);
+            }
+        }
+
+        function showSuccess() {
+            document.getElementById('msg-text').textContent = `${currentY} × ${currentX} = ${targetValue}`;
+            msgBox.style.display = 'block';
+        }
+
+        function closeMsg() {
+            msgBox.style.display = 'none';
+            if (isGameCleared) initGame();
+        }
+
+        // ドラッグ操作の強化
+        let isDragging = false;
+        let dragTarget = null; // 'top' or 'left'
+
+        function handleDrag(e) {
+            if (!isDragging) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            if (dragTarget === 'top') {
+                const rect = barTop.getBoundingClientRect();
+                const x = clientX - rect.left;
+                let val = Math.floor(x / CELL_SIZE) + 2;
+                val = Math.max(2, Math.min(9, val));
+                if (val !== currentX) updatePositions(val, currentY);
+            } else {
+                const rect = barLeft.getBoundingClientRect();
+                const y = clientY - rect.top;
+                let val = Math.floor(y / CELL_SIZE) + 2;
+                val = Math.max(2, Math.min(9, val));
+                if (val !== currentY) updatePositions(currentX, val);
+            }
+        }
+
+        barTop.addEventListener('mousedown', (e) => { isDragging = true; dragTarget = 'top'; handleDrag(e); });
+        barLeft.addEventListener('mousedown', (e) => { isDragging = true; dragTarget = 'left'; handleDrag(e); });
+        barTop.addEventListener('touchstart', (e) => { isDragging = true; dragTarget = 'top'; handleDrag(e); e.preventDefault(); }, {passive: false});
+        barLeft.addEventListener('touchstart', (e) => { isDragging = true; dragTarget = 'left'; handleDrag(e); e.preventDefault(); }, {passive: false});
+
+        window.addEventListener('mousemove', handleDrag);
+        window.addEventListener('touchmove', handleDrag, {passive: false});
+        window.addEventListener('mouseup', () => isDragging = false);
+        window.addEventListener('touchend', () => isDragging = false);
+
+        window.onload = () => {
+            setupBoard();
+            initGame();
+        };
+    </script>
+</body>
+</html>
