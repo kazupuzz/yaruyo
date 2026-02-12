@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>割り算カットゲーム</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .status {
+            font-size: 18px;
+            margin-bottom: 20px;
+            height: 30px;
+            font-weight: bold;
+            color: #555;
+            text-align: center;
+        }
+
+        /* 棒の表示エリア */
+        .bar-container-wrapper {
+            position: relative;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            width: 90%;
+            max-width: 600px;
+        }
+
+        .bar-label {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .bar-container {
+            display: flex;
+            align-items: center;
+            height: 60px;
+            width: 100%;
+            transition: all 0.3s;
+        }
+
+        /* 棒の1単位（目盛り） */
+        .unit {
+            flex: 1 1 0;
+            min-width: 0;
+            height: 40px;
+            background-color: #3498db;
+            border-right: 1px solid rgba(255,255,255,0.5);
+            box-sizing: border-box;
+            position: relative;
+            /* アニメーション用 */
+            transition: margin-right 0.3s ease, background-color 0.3s;
+        }
+
+        .unit:first-child {
+            border-top-left-radius: 5px;
+            border-bottom-left-radius: 5px;
+        }
+        .unit:last-child {
+            border-top-right-radius: 5px;
+            border-bottom-right-radius: 5px;
+            border-right: none;
+        }
+
+        /* 目盛り数字 */
+        .unit span {
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #888;
+            white-space: nowrap;
+        }
+
+        /* カットされた時のスペーサー（右マージンで表現） */
+        .cut-gap {
+            margin-right: 10px;
+            border-right: none;
+            border-top-right-radius: 5px;
+            border-bottom-right-radius: 5px;
+        }
+        /* カット後の次の要素の左側を丸める */
+        .cut-next {
+            border-top-left-radius: 5px;
+            border-bottom-left-radius: 5px;
+        }
+
+        /* 失敗時の色 */
+        .remainder {
+            background-color: #e74c3c !important;
+        }
+        /* 成功時の色 */
+        .success-color {
+            background-color: #2ecc71 !important;
+        }
+
+        /* 操作ボタンエリア */
+        .choices {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 20px;
+            border: none;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 4px 0 #bdc3c7;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #bdc3c7;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            background-color: #eee;
+        }
+
+        .btn-choice {
+            background-color: #3498db;
+            color: white;
+            box-shadow: 0 4px 0 #2980b9;
+            min-width: 80px;
+        }
+        
+        .btn-choice:active {
+            box-shadow: 0 0 0 #2980b9;
+        }
+
+        .btn-next {
+            display: none; /* 最初は非表示 */
+            background-color: #f1c40f;
+            color: #333;
+            box-shadow: 0 4px 0 #f39c12;
+            font-weight: bold;
+        }
+
+        .btn-next:active {
+            box-shadow: 0 0 0 #f39c12;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>割り算カットゲーム</h1>
+    <div id="status" class="status">数字を選んでカットしよう</div>
+
+    <div class="bar-container-wrapper">
+        <div id="targetLabel" class="bar-label">長さ: ?</div>
+        <div id="barContainer" class="bar-container">
+            <!-- ここに棒（ブロック）が生成されます -->
+        </div>
+    </div>
+
+    <div class="choices" id="choicesContainer">
+        <!-- 選択肢ボタンがここに生成されます -->
+    </div>
+    
+    <button id="nextBtn" class="btn-next" onclick="initGame()">次の問題へ</button>
+
+    <script>
+        let currentX = 0;
+        let isAnimating = false;
+
+        // ゲーム初期化・問題生成
+        function initGame() {
+            const barContainer = document.getElementById('barContainer');
+            const choicesContainer = document.getElementById('choicesContainer');
+            const statusDiv = document.getElementById('status');
+            const nextBtn = document.getElementById('nextBtn');
+            const targetLabel = document.getElementById('targetLabel');
+
+            // リセット
+            barContainer.innerHTML = '';
+            choicesContainer.innerHTML = '';
+            statusDiv.textContent = '数字を選んでカットしよう';
+            statusDiv.style.color = '#555';
+            nextBtn.style.display = 'none';
+            isAnimating = false;
+
+            // 1. 正解の数（割り切る数）を決める (2〜9)
+            const correctDivisor = Math.floor(Math.random() * 8) + 2;
+
+            // 2. X（棒の長さ）を決める。
+            // 画面に収まりやすいよう、正解の数の 2〜6倍程度にする
+            const multiplier = Math.floor(Math.random() * 5) + 2; 
+            currentX = correctDivisor * multiplier;
+
+            targetLabel.textContent = `長さ: ${currentX}`;
+
+            // 3. 不正解の選択肢（割り切れない数）を2つ決める
+            // 条件：2〜9の間、currentXを割り切れない、重複しない
+            let wrongChoices = [];
+            let safetyCount = 0;
+            while (wrongChoices.length < 2 && safetyCount < 100) {
+                let cand = Math.floor(Math.random() * 8) + 2;
+                if (cand !== correctDivisor && currentX % cand !== 0 && !wrongChoices.includes(cand)) {
+                    wrongChoices.push(cand);
+                }
+                safetyCount++;
+            }
+
+            // 万が一、割り切れない数が見つからない場合は再生成
+            if (wrongChoices.length < 2) {
+                initGame();
+                return;
+            }
+
+            // 4. 選択肢を混ぜる
+            let options = [correctDivisor, ...wrongChoices];
+            options = shuffleArray(options);
+
+            // 目盛りを振る間隔（棒が長い場合は間引く）
+            let step = currentX > 20 ? 10 : 5;
+
+            // 5. 棒（ユニット）の描画
+            for (let i = 1; i <= currentX; i++) {
+                const unit = document.createElement('div');
+                unit.className = 'unit';
+                unit.id = `unit-${i}`;
+                
+                // 目盛り数字（端と一定間隔で表示し、文字被りを防ぐ）
+                if (i === 1 || i === currentX || (i % step === 0 && (currentX - i) > step * 0.5)) {
+                    const span = document.createElement('span');
+                    span.textContent = i;
+                    unit.appendChild(span);
+                }
+                barContainer.appendChild(unit);
+            }
+
+            // 6. ボタンの描画
+            options.forEach(num => {
+                const btn = document.createElement('button');
+                btn.textContent = num;
+                btn.className = 'btn-choice';
+                btn.onclick = () => startCut(num);
+                choicesContainer.appendChild(btn);
+            });
+        }
+
+        // 配列シャッフル用
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // カットのアニメーション処理
+        async function startCut(divisor) {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            const statusDiv = document.getElementById('status');
+            const btns = document.querySelectorAll('.btn-choice');
+            btns.forEach(b => b.disabled = true); // 連打防止
+
+            statusDiv.textContent = `${divisor} ずつ切っています...`;
+            statusDiv.style.color = '#333';
+
+            let currentIndex = 0;
+            const units = document.querySelectorAll('.unit');
+            const totalUnits = units.length;
+
+            // アニメーションループ
+            while (currentIndex < totalUnits) {
+                // 次のカット地点
+                let cutPoint = currentIndex + divisor;
+                
+                // 少し待機（アニメーションの間隔）
+                await new Promise(r => setTimeout(r, 500));
+
+                // はみ出す場合（余りが出る場合）
+                if (cutPoint > totalUnits) {
+                    // 残りの部分を赤くする（余り）
+                    for (let i = currentIndex; i < totalUnits; i++) {
+                        units[i].classList.add('remainder');
+                    }
+                    statusDiv.textContent = `残念！ ${totalUnits - currentIndex} 余ってしまいました。`;
+                    statusDiv.style.color = '#e74c3c';
+                    finishGame();
+                    return;
+                }
+
+                // ちょうど割り切れた場合の最後の処理
+                if (cutPoint === totalUnits) {
+                    currentIndex = cutPoint;
+                    break;
+                }
+
+                // カット演出（隙間を作る）
+                // cutPoint番目の要素（インデックスは cutPoint-1）に隙間クラスを付与
+                const unitToCut = units[cutPoint - 1];
+                const nextUnit = units[cutPoint];
+                
+                if (unitToCut) {
+                    unitToCut.classList.add('cut-gap');
+                    if(nextUnit) nextUnit.classList.add('cut-next');
+                }
+
+                currentIndex = cutPoint;
+            }
+
+            // ループを正常に抜けたら成功（割り切れた）
+            statusDiv.textContent = `正解！ ${divisor} でぴったり切れました！`;
+            statusDiv.style.color = '#2ecc71';
+            
+            // 全体を緑色にして祝福
+            units.forEach(u => u.classList.add('success-color'));
+            finishGame();
+        }
+
+        // ゲーム終了処理（次へボタンの表示）
+        function finishGame() {
+            const nextBtn = document.getElementById('nextBtn');
+            nextBtn.style.display = 'block';
+        }
+
+        // 初回実行
+        initGame();
+
+    </script>
+</body>
+</html>
